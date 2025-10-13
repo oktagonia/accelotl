@@ -1,0 +1,14 @@
+# Build artifacts
+build/
+*.vvp
+*.vcd
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
