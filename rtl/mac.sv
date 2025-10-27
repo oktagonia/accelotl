@@ -3,9 +3,9 @@
 module mac
   #(parameter WIDTH = 8, parameter OUT_WIDTH)
    (input logic               clk, reset,
-    input logic [WIDTH-1:0]    n, w, // incoming from north and west
-    output logic [WIDTH-1:0]   s, e, // outgoing to south and east
-    output logic [OUT_WIDTH-1:0] p);
+    input logic signed [WIDTH-1:0]    n, w,
+    output logic signed [WIDTH-1:0]   s, e,
+    output logic signed [OUT_WIDTH-1:0] p);
    
    always_ff @(posedge clk, posedge reset)
      begin
