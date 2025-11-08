@@ -1,5 +1,7 @@
 # Accelotl
 
+![Axolotl](axolotl.jpg)
+
 Hardware neural network accelerator with systolic array architecture in SystemVerilog.
 
 ## Architecture
