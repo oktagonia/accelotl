@@ -1,19 +1,19 @@
 module weight_store
   #(parameter ROWS = 8,
-    parameter COLS = 16,
-    parameter WIDTH = 8)
-   (input logic                    clk, 
+     parameter COLS = 16,
+     parameter WIDTH = 8)
+   (input logic                          clk, 
     // write ports
-    input logic                    we,
-    input logic [$clog2(COLS)-1:0] wcol,
-    input logic [ROWS*WIDTH-1:0]   wdata,
+    input logic                          we,
+    input logic [$clog2(COLS)-1:0]       wcol,
+    input logic signed [ROWS*WIDTH-1:0]  wdata,
     // read ports
-    input logic                   re, reset,
-    output logic [ROWS*WIDTH-1:0] rdata,
-    output logic                  empty);
+    input logic                          re, reset,
+    output logic signed [ROWS*WIDTH-1:0] rdata,
+    output logic                         empty);
 
-   logic [ROWS*COLS*WIDTH-1:0] mat;
-   logic [$clog2(COLS)-1:0]    rcol;
+   logic signed [ROWS*COLS*WIDTH-1:0] mat;
+   logic [$clog2(COLS)-1:0]           rcol;
    
    always_ff @(posedge clk)
      begin
@@ -28,7 +28,7 @@ module weight_store
 
         for (int i = 0; i < ROWS; i++)
           rdata[i*WIDTH+:WIDTH] <= mat[(i*COLS + rcol)*WIDTH+:WIDTH];
-     end
+     end // always_ff @ (posedge clk)
 
    assign empty = rcol == COLS;
 

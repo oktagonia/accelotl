@@ -15,19 +15,20 @@ module matmul
    assign S[0+:WIDTH] = b;
    
    generate
-      for (genvar i = 0; i < N; i = i + 1) begin : fa_loop
-         logic signed [WIDTH-1:0] n, w, s, e;
-         logic signed [OUT_WIDTH-1:0] c;
-         
-         assign n = S[i * WIDTH+:WIDTH];
-         assign w = A[i * WIDTH+:WIDTH];
-         
-         mac #(.WIDTH(WIDTH), .OUT_WIDTH(OUT_WIDTH)) pe(clk, reset, n, w, s, e, c);
-         
-         assign S[(i+1) * WIDTH+:WIDTH] = s;
-         assign E[(i+1) * WIDTH+:WIDTH] = e;
-         assign C[i * OUT_WIDTH+:OUT_WIDTH] = c;
-      end
+      for (genvar i = 0; i < N; i = i + 1)
+        begin : fa_loop
+           logic signed [WIDTH-1:0] n, w, s, e;
+           logic signed [OUT_WIDTH-1:0] c;
+           
+           assign n = S[i * WIDTH+:WIDTH];
+           assign w = A[i * WIDTH+:WIDTH];
+           
+           mac #(.WIDTH(WIDTH), .OUT_WIDTH(OUT_WIDTH)) pe(clk, reset, n, w, s, e, c);
+           
+           assign S[(i+1) * WIDTH+:WIDTH] = s;
+           assign E[(i+1) * WIDTH+:WIDTH] = e;
+           assign C[i * OUT_WIDTH+:OUT_WIDTH] = c;
+        end
    endgenerate
 
    always_ff @(posedge clk, posedge reset)

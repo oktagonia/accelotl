@@ -4,7 +4,7 @@
 IVERILOG ?= iverilog
 VVP ?= vvp
 
-.PHONY: serializer mac matmul relu accel weight_store clean
+.PHONY: serializer mac matmul relu accel weight_store queue clean
 
 serializer:
 	$(IVERILOG) -g2012 -o serializer_tb rtl/serializer.sv tb/serializer_tb.sv
@@ -29,6 +29,10 @@ accel:
 weight_store:
 	$(IVERILOG) -g2012 -o weight_store_tb rtl/weight_store.sv tb/weight_store_tb.sv
 	$(VVP) weight_store_tb
+
+queue:
+	$(IVERILOG) -g2012 -o queue_tb rtl/queue.sv tb/queue_tb.sv
+	$(VVP) queue_tb
 
 clean:
 	rm -f *_tb *.vcd
