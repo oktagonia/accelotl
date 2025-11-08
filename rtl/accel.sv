@@ -19,7 +19,7 @@ module accel
    // MODULES
 
    logic re, empty;
-   logic [ROWS*COLS*WIDTH-1:0] weight;
+   logic [ROWS*WIDTH-1:0] weight;
 
    weight_store #(ROWS, COLS, WIDTH) weights
      (clk, w_load_e, wcol, wdata, re, wreset, weight, empty);
@@ -30,8 +30,9 @@ module accel
    matmul #(.N(NEURONS), .M(NEURONS), .WIDTH(WIDTH)) matmul
      (clk, mreset, weight, qout, out_vec, mdone);
 
-   logic signed [WIDTH-1:0] qin, qout, qload;
-   logic                    qreset;
+   logic signed [WIDTH-1:0] qin, qout;
+   logic signed [NEURONS*WIDTH-1:0] qload;
+   logic                    qreset, q_load_e;
 
    assign qin = 0;
    assign qreset = reset;
@@ -41,7 +42,7 @@ module accel
 
    // STATE MACHINE
    
-   typedef enum logic [2:0]
+   typedef enum logic [1:0]
      { IDLE,
        INIT,
        COMPUTE,
@@ -56,7 +57,7 @@ module accel
      case (state)
        IDLE:
          begin
-            next_state = start ? INIT : IDLE;
+            next_state = state_t'(start ? INIT : IDLE);
             re = 0;
             q_load_e = 0;
             mreset = 1;
@@ -67,7 +68,6 @@ module accel
          begin
             next_state = COMPUTE;
             q_load_e = 1;
-            wreset = 1;
             mreset = 1;
             done = 0;
             re = 0;
@@ -75,26 +75,30 @@ module accel
          end
        COMPUTE:
          begin
-            next_state = mdone ? LOAD_OUTPUT : COMPUTE;
+            next_state = state_t'(mdone ? LOAD_OUTPUT : COMPUTE);
             re = 1;
             q_load_e = 0;
             mreset = 0;
-            wreset = 0;
             done = 0;
             qload = init_qin;
          end
        LOAD_OUTPUT:
          begin
-            next_state = empty ? IDLE : COMPUTE;
+            next_state = state_t'(empty ? IDLE : COMPUTE);
             re = 0;
             q_load_e = 1;
             mreset = 1;
-            wreset = 0;
             qload = out_vec;
             done = empty;
          end
        default:
-         next_state = state;
+         begin
+            re = 0;
+            q_load_e = 0;
+            mreset = 1;
+            done = 0;
+            qload = init_qin;
+         end
      endcase // case (state)
 
    assign result = out_vec;

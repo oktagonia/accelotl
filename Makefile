@@ -23,8 +23,8 @@ relu:
 	$(VVP) relu_tb
 
 accel:
-	$(IVERILOG) -g2012 -o accel_tb rtl/mac.sv rtl/matmul.sv rtl/activation.sv rtl/accel.sv tb/accel_tb.sv
-	$(VVP) accel_tb
+	$(IVERILOG) -g2012 -o build/accel_tb rtl/mac.sv rtl/matmul.sv rtl/weight_store.sv rtl/queue.sv rtl/accel.sv tb/accel_tb.sv
+	$(VVP) build/accel_tb
 
 weight_store:
 	$(IVERILOG) -g2012 -o weight_store_tb rtl/weight_store.sv tb/weight_store_tb.sv
