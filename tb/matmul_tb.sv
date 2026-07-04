@@ -5,19 +5,37 @@ module matmul_tb;
    localparam int N = 2;
    localparam int M = 4;
    localparam int OUT_WIDTH = 2*WIDTH + $clog2(M);
+   localparam int TIME = M + N - 1;
    
    logic clk = 0, reset = 1;
+   logic acce = 1;
    logic signed [N*WIDTH-1:0] A;
    logic signed [WIDTH-1:0] b;
    logic signed [N*OUT_WIDTH-1:0] C;
    logic done;
+   integer cycle_count;
    
    matmul #(.WIDTH(WIDTH), .N(N), .M(M)) dut(
-      .clk(clk), .reset(reset),
+      .clk(clk), .reset(reset), .acce(acce),
       .A(A), .b(b), .C(C), .done(done)
    );
    
    always #5 clk = ~clk;  // 10ns clock
+   
+   always @(posedge clk) begin
+      if (reset) begin
+         cycle_count <= 0;
+      end else begin
+         cycle_count <= cycle_count + 1;
+         if (done) begin
+            if (cycle_count != TIME) begin
+               $error("done asserted at cycle %0d expected %0d", cycle_count, TIME);
+            end else begin
+               $display("done asserted correctly at cycle %0d", cycle_count);
+            end
+         end
+      end
+   end
    
    initial begin
       $dumpfile("matmul_tb.vcd");
@@ -114,6 +132,7 @@ module matmul_tb;
       b = 0;
       @(posedge clk);
       reset = 0;
+      cycle_count = 0;
       
       // Time step 0
       A[0*WIDTH +: WIDTH] = -8'd1;

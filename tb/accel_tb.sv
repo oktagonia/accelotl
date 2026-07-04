@@ -1,185 +1,113 @@
 `timescale 1ns/1ps
 
 module accel_tb;
-
    localparam int WIDTH = 8;
-   localparam int NEURONS = 3;
-   localparam int LAYERS = 3;
+   localparam int NEURONS = 2;
+   localparam int LAYERS = 2;
    localparam int ROWS = NEURONS;
-   localparam int COLS = NEURONS * LAYERS;  // 3 layers × 3 neurons = 9 columns
+   localparam int STREAM_CYCLES = 2*NEURONS - 1;
+   localparam int COLS = STREAM_CYCLES * LAYERS;
    localparam int OUT_WIDTH = 2*WIDTH + $clog2(NEURONS);
 
    logic clk = 0;
-   
-   // Reset signal
    logic reset = 0;
-   
-   // Weight loading ports
-   logic w_load_e = 0;
-   logic [$clog2(COLS)-1:0] wcol;
-   logic signed [ROWS*WIDTH-1:0] wdata;
-   
-   // Input loading
-   logic signed [NEURONS*WIDTH-1:0] init_qin;
-   
-   // Control
    logic start = 0;
-   
-   // Outputs
-   logic done;
+   logic we = 0;
+   logic [$clog2(COLS)-1:0] wcol = 0;
+   logic [ROWS*WIDTH-1:0] wdata = 0;
+   logic [$clog2(LAYERS+1)-1:0] nlayers = LAYERS;
+   logic signed [NEURONS*WIDTH-1:0] init_qin = 0;
    logic signed [NEURONS*OUT_WIDTH-1:0] result;
+   logic done;
 
-   // Instantiate DUT with explicit port connections
-   accel #(.WIDTH(WIDTH), .NEURONS(NEURONS), .LAYERS(LAYERS))
-         dut(
-            .clk(clk),
-            .reset(reset),
-            .start(start),
-            .w_load_e(w_load_e),
-            .wcol(wcol),
-            .wdata(wdata),
-            .init_qin(init_qin),
-            .result(result),
-            .done(done)
-         );
+   accel #(
+      .WIDTH(WIDTH),
+      .NEURONS(NEURONS),
+      .LAYERS(LAYERS)
+   ) dut (
+      .clk(clk),
+      .reset(reset),
+      .start(start),
+      .we(we),
+      .wcol(wcol),
+      .wdata(wdata),
+      .nlayers(nlayers),
+      .init_qin(init_qin),
+      .result(result),
+      .done(done)
+   );
 
-   // Clock generation
    always #5 clk = ~clk;
 
+   task automatic load_col(
+      input logic [$clog2(COLS)-1:0] col,
+      input logic signed [WIDTH-1:0] row0,
+      input logic signed [WIDTH-1:0] row1
+   );
+      begin
+         @(negedge clk);
+         wcol = col;
+         wdata = {row1, row0};
+         we = 1;
+         @(posedge clk);
+         @(negedge clk);
+         we = 0;
+      end
+   endtask
+
    initial begin
-      $display("=== Accel Testbench ===");
-      $display("Configuration: %0d neurons, %0d layers, %0d-bit width", 
-               NEURONS, LAYERS, WIDTH);
-      
-      // Reset the system
+      $display("=== accel_tb: two-layer run ===");
+
       reset = 1;
-      @(posedge clk);
-      @(posedge clk);
+      start = 0;
+      we = 0;
+      init_qin = 0;
+      repeat (2) @(posedge clk);
+      @(negedge clk);
       reset = 0;
+
+      // Layer 0 matrix:
+      //   [1 2]
+      //   [3 4]
+      // x = [5,6], expected layer0 = [17,39]
+      load_col(0, 8'sd1, 8'sd0);
+      load_col(1, 8'sd2, 8'sd3);
+      load_col(2, 8'sd0, 8'sd4);
+
+      // Layer 1 matrix:
+      //   [1 1]
+      //   [2 1]
+      // expected final = [56,73]
+      load_col(3, 8'sd1, 8'sd0);
+      load_col(4, 8'sd1, 8'sd2);
+      load_col(5, 8'sd0, 8'sd1);
+
+      // Queue emits high lane first, so pack {x0,x1}.
+      @(negedge clk);
+      init_qin = {8'sd5, 8'sd6};
+      start = 1;
       @(posedge clk);
-      
-      // ========================================
-      // Load Weights with Zero Padding
-      // ========================================
-      $display("\n=== Loading Weights (Zero-Padded for Systolic Array) ===");
-      
-      // For a systolic array processing NEURONS inputs over NEURONS cycles,
-      // we need to zero-pad the weight matrix so each column processes
-      // sequentially as inputs stream through
-      
-      // Layer 0 Weight Matrix (3x3):
-      // Column 0: weights for neuron 0 when processing 3 input elements
-      //   [w00, w01, w02] where w0i is weight from input i to neuron 0
-      
-      $display("Loading Layer 0 weights...");
-      
-      // Layer 0, Column 0 (for neuron 0)
-      wcol = 0;
-      wdata = {8'sd2, 8'sd1, 8'sd3};  // [w00=2, w10=1, w20=3]
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      $display("  Column 0: weights = [%0d, %0d, %0d]", 
-               $signed(wdata[0+:8]), $signed(wdata[8+:8]), $signed(wdata[16+:8]));
-      
-      // Layer 0, Column 1 (for neuron 1)
-      wcol = 1;
-      wdata = {8'sd1, 8'sd2, 8'sd1};  // [w01=1, w11=2, w21=1]
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      $display("  Column 1: weights = [%0d, %0d, %0d]", 
-               $signed(wdata[0+:8]), $signed(wdata[8+:8]), $signed(wdata[16+:8]));
-      
-      // Layer 0, Column 2 (for neuron 2)
-      wcol = 2;
-      wdata = {8'sd3, 8'sd1, 8'sd2};  // [w02=3, w12=1, w22=2]
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      $display("  Column 2: weights = [%0d, %0d, %0d]", 
-               $signed(wdata[0+:8]), $signed(wdata[8+:8]), $signed(wdata[16+:8]));
-      
-      $display("Loading Layer 1 weights...");
-      
-      // Layer 1, Column 0
-      wcol = 3;
-      wdata = {8'sd1, 8'sd1, 8'sd1};
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      
-      // Layer 1, Column 1
-      wcol = 4;
-      wdata = {8'sd2, 8'sd2, 8'sd2};
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      
-      // Layer 1, Column 2
-      wcol = 5;
-      wdata = {8'sd1, 8'sd1, 8'sd1};
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      
-      $display("Loading Layer 2 weights...");
-      
-      // Layer 2, Column 0
-      wcol = 6;
-      wdata = {8'sd1, 8'sd2, 8'sd1};
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      
-      // Layer 2, Column 1
-      wcol = 7;
-      wdata = {8'sd2, 8'sd1, 8'sd2};
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      
-      // Layer 2, Column 2
-      wcol = 8;
-      wdata = {8'sd1, 8'sd1, 8'sd3};
-      w_load_e = 1;
-      @(posedge clk);
-      @(posedge clk);
-      w_load_e = 0;
-      
-      $display("All weights loaded successfully!\n");
-      
-      // ========================================
-      // Verify Weight Loading
-      // ========================================
-      $display("=== Weight Loading Test Complete ===");
-      $display("Successfully loaded %0d weight columns", COLS);
-      $display("Weight storage verified:");
-      $display("  - Layer 0: columns 0-2");
-      $display("  - Layer 1: columns 3-5");
-      $display("  - Layer 2: columns 6-8");
-      
-      // Wait a few cycles and finish
-      repeat(10) @(posedge clk);
-      
-      $display("\n=== Test Passed ===");
-      $display("Weight loading mechanism working correctly.");
-      $finish;
-   end
-   
-   // Timeout watchdog
-   initial begin
-      #100000;
-      $display("\nERROR: Testbench timeout!");
+      @(negedge clk);
+      start = 0;
+
+      wait (done);
+      @(negedge clk);
+
+      $display("Final result: {%0d,%0d} expected {56,73}",
+               $signed(result[0*OUT_WIDTH +: OUT_WIDTH]),
+               $signed(result[1*OUT_WIDTH +: OUT_WIDTH]));
+
+      if ($signed(result[0*OUT_WIDTH +: OUT_WIDTH]) !== 56 ||
+          $signed(result[1*OUT_WIDTH +: OUT_WIDTH]) !== 73) begin
+         $error("Unexpected accel result");
+      end
+
       $finish;
    end
 
+   initial begin
+      #2000;
+      $error("timeout waiting for done");
+      $finish;
+   end
 endmodule

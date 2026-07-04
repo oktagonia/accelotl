@@ -1,0 +1,186 @@
+`timescale 1ns/1ps
+
+module combined_tb;
+   localparam int WIDTH = 8;
+	   localparam int N = 2;
+	   localparam int M = 4;
+	   localparam int ROWS = N;
+	   localparam int OUT_WIDTH = 2*WIDTH + $clog2(M);
+	   localparam int TIME = M + N - 1;
+	   localparam int COLS = TIME;
+
+   logic clk = 0;
+   logic reset = 0;
+
+   // weight_store signals
+   logic                      we;
+   logic [$clog2(COLS)-1:0]   wcol;
+   logic [ROWS*WIDTH-1:0]     wdata;
+   logic                      re;
+   logic                      wreset;
+   logic [ROWS*WIDTH-1:0]     rdata;
+   logic                      empty;
+
+   // queue signals
+	   logic signed [WIDTH-1:0]   north;
+	   logic signed [WIDTH-1:0]   south;
+	   logic                      le;
+	   logic                      shifte;
+	   logic signed [M*WIDTH-1:0] data;
+
+	   // matmul signals
+	   logic signed [N*WIDTH-1:0] A;
+	   logic signed [WIDTH-1:0]   b;
+	   logic signed [N*OUT_WIDTH-1:0] C;
+	   logic                      acce;
+	   logic                      done;
+
+   // Instances
+   weight_store #(.ROWS(ROWS), .COLS(COLS), .WIDTH(WIDTH)) ws(
+      .clk(clk),
+      .we(we),
+      .wcol(wcol),
+      .wdata(wdata),
+      .re(re),
+      .reset(wreset),
+      .rdata(rdata),
+      .empty(empty)
+   );
+
+	   queue #(.WIDTH(WIDTH), .LENGTH(M)) q(
+	      .clk(clk),
+	      .reset(reset),
+	      .shifte(shifte),
+	      .north(north),
+	      .south(south),
+	      .le(le),
+      .data(data)
+   );
+
+	   matmul #(.N(N), .M(M), .WIDTH(WIDTH)) dut(
+	      .clk(clk),
+	      .reset(reset),
+	      .acce(acce),
+	      .A(A),
+	      .b(b),
+      .C(C),
+      .done(done)
+   );
+
+   // Clock
+   always #5 clk = ~clk;
+
+   // Drive A and b from ws and queue
+   assign A = rdata;
+   assign b = south;
+
+   // Per-cycle trace
+   always @(posedge clk) begin
+      $display("[t=%0t] A0=%0d A1=%0d b=%0d", $time,
+               $signed(A[0*WIDTH +: WIDTH]),
+               $signed(A[1*WIDTH +: WIDTH]),
+               $signed(b));
+   end
+
+   initial begin
+      $display("=== combined_tb ===");
+
+      // Init
+      clk = 0;
+	    reset = 1;
+	    wreset = 1;
+	    we = 0;
+	    re = 0;
+	    acce = 0;
+	    shifte = 0;
+	    le = 0;
+	    north = 0;
+	    data = 0;
+      wcol = 0;
+      wdata = 0;
+      @(posedge clk);
+
+	      // Load the padded/skewed weight stream from matmul_tb.
+	      // Column 0: [1,0]
+	      wcol = 0;
+	      wdata = {8'd0, 8'd1};
+	      we = 1;
+	      @(posedge clk);
+	      @(posedge clk);
+	      we = 0;
+
+	      // Column 1: [2,5]
+	      wcol = 1;
+	      wdata = {8'd5, 8'd2};
+	      we = 1;
+	      @(posedge clk);
+	      @(posedge clk);
+	      we = 0;
+
+	      // Column 2: [3,6]
+	      wcol = 2;
+	      wdata = {8'd6, 8'd3};
+	      we = 1;
+	      @(posedge clk);
+	      @(posedge clk);
+	      we = 0;
+
+	      // Column 3: [4,7]
+	      wcol = 3;
+	      wdata = {8'd7, 8'd4};
+	      we = 1;
+	      @(posedge clk);
+	      @(posedge clk);
+	      we = 0;
+
+	      // Column 4: [0,8]
+	      wcol = 4;
+	      wdata = {8'd8, 8'd0};
+	      we = 1;
+	      @(posedge clk);
+	      @(posedge clk);
+	      we = 0;
+
+	      // Reset read pointer in weight_store
+	      wreset = 1;
+	      @(posedge clk);
+	      @(negedge clk);
+	      wreset = 0;
+
+	      // Load vector [1,2,3,4] into queue so that south outputs 1,2,3,4.
+	      reset = 0;
+	      data = {8'd1, 8'd2, 8'd3, 8'd4};
+	      le = 1;
+	      @(posedge clk);
+	      @(negedge clk);
+	      le = 0;
+
+	      // Prime weight_store while holding queue output at x0.
+	      // re=1 here advances the internal pointer so RUN cycle 1 sees column 1.
+	      acce = 0;
+	      shifte = 0;
+	      re = 1;
+	      @(posedge clk);
+	      @(negedge clk);
+
+	      // Consume exactly TIME aligned stream cycles.
+	      re = 1;
+	      acce = 1;
+	      shifte = 1;
+	      north = 0;
+	      repeat (TIME) @(posedge clk);
+	      @(negedge clk);
+
+	      // Stop
+	      re = 0;
+	      acce = 0;
+	      shifte = 0;
+
+      $display("Results:");
+      $display("  C[0] = %0d (expected 30)", $signed(C[0*OUT_WIDTH +: OUT_WIDTH]));
+      $display("  C[1] = %0d (expected 70)", $signed(C[1*OUT_WIDTH +: OUT_WIDTH]));
+
+      $finish;
+   end
+
+endmodule

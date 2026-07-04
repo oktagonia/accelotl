@@ -2,6 +2,7 @@ module queue
   #(parameter WIDTH = 8,
     parameter LENGTH)
    (input logic                           clk, reset,
+    input logic                           shifte,
     // queue ports
     input logic signed [WIDTH-1:0]        north,
     output logic signed [WIDTH-1:0]       south,
@@ -17,7 +18,7 @@ module queue
           regs <= 0;
         else if (le)
           regs <= data;
-        else
+        else if (shifte)
           begin
              regs[0+:WIDTH] <= north;
              for (int i = 1; i < LENGTH; i++)

@@ -6,12 +6,14 @@ module mac_tb;
    
    logic clk = 0;
    logic reset = 1;
+   logic acce = 1;
+   
    logic signed [WIDTH-1:0] n, w;
    logic signed [WIDTH-1:0] s, e;
    logic signed [OUT_WIDTH-1:0] p;
    
    mac #(.WIDTH(WIDTH), .OUT_WIDTH(OUT_WIDTH)) dut(
-      .clk(clk), .reset(reset),
+      .clk(clk), .reset(reset), .acce(acce),
       .n(n), .w(w), .s(s), .e(e), .p(p)
    );
    
@@ -89,6 +91,14 @@ module mac_tb;
       
       @(posedge clk);
       $display("Test 8 - After reset, n=10, w=10: p=%0d (expect 100)", p);
+
+      // Hold test
+      acce = 0;
+      n = 8'd7;
+      w = 8'd7;
+      @(posedge clk);
+      $display("Hold test: p=%0d (expect unchanged)", p);
+      acce = 1;
       
       #50;
       $display("=== MAC Test Complete ===");
