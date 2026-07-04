@@ -4,14 +4,6 @@
 
 Hardware neural network accelerator with systolic array architecture in SystemVerilog.
 
-## Architecture
-
-- **MAC units** with planned uniform quantization.
-- **Systolic array** for matrix-vector multiplication
-- **Weight store** with column-wise streaming
-- **Queue** for activation storage and data feeding
-- **FSM controller** for multi-layer execution
-
 ## Modules
 
 | Module            | Description                       |
