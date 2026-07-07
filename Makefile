@@ -1,10 +1,10 @@
 # Simple Makefile: one target per testbench
-# Usage: make serializer / make mac / make matmul / make relu / make accel / make weight_store
+# Usage: make serializer / make mac / make matmul / make relu / make requantizer / make accel / make weight_store
 
 IVERILOG ?= iverilog
 VVP ?= vvp
 
-.PHONY: serializer mac matmul relu accel weight_store queue combined clean
+.PHONY: serializer mac matmul relu requantizer accel weight_store queue combined clean
 
 serializer:
 	$(IVERILOG) -g2012 -o serializer_tb rtl/serializer.sv tb/serializer_tb.sv
@@ -22,9 +22,13 @@ relu:
 	$(IVERILOG) -g2012 -o relu_tb rtl/relu.sv tb/relu_tb.sv
 	$(VVP) relu_tb
 
+requantizer:
+	$(IVERILOG) -g2012 -o requantizer_tb rtl/requantizer.sv tb/requantizer_tb.sv
+	$(VVP) requantizer_tb
+
 accel:
 	mkdir -p build
-	$(IVERILOG) -g2012 -o build/accel_tb rtl/mac.sv rtl/matmul.sv rtl/weight_store.sv rtl/queue.sv rtl/accel.sv tb/accel_tb.sv
+	$(IVERILOG) -g2012 -o build/accel_tb rtl/mac.sv rtl/matmul.sv rtl/weight_store.sv rtl/queue.sv rtl/requantizer.sv rtl/accel.sv tb/accel_tb.sv
 	$(VVP) build/accel_tb
 
 weight_store:

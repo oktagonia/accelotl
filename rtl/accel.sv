@@ -2,6 +2,7 @@ module accel
   #(parameter WIDTH = 8,
     parameter NEURONS = 3,
     parameter LAYERS = 3,
+    parameter SHIFT_WIDTH = 5,
     parameter ROWS = NEURONS,
     parameter COLS = (2*NEURONS-1)*LAYERS,
     parameter OUT_WIDTH = 2*WIDTH + $clog2(NEURONS),
@@ -11,8 +12,9 @@ module accel
     input logic [$clog2(COLS)-1:0]              wcol,
     input logic [ROWS*WIDTH-1:0]                wdata,
     input logic [$clog2(LAYERS+1)-1:0]          nlayers,
+    input logic [LAYERS*SHIFT_WIDTH-1:0]        shifts,
     input logic signed [NEURONS*WIDTH-1:0]      init_qin,
-    output logic signed [NEURONS*OUT_WIDTH-1:0] result,
+    output logic signed [NEURONS*WIDTH-1:0] result,
     output logic                                done);
 
    logic re, empty;
@@ -24,9 +26,11 @@ module accel
    logic qreset, mreset, wreset;
    
    logic [ROWS*WIDTH-1:0] rdata;
+   logic [SHIFT_WIDTH-1:0] shift;
    logic signed [WIDTH-1:0] north, south;
    logic signed [NEURONS*WIDTH-1:0] data;
    logic signed [NEURONS*WIDTH-1:0] feedback_qin;
+   logic signed [NEURONS*WIDTH-1:0] reqout;
    logic signed [NEURONS*OUT_WIDTH-1:0] out_vec;
 
    logic [$clog2(LAYERS):0]             layer;
@@ -34,16 +38,19 @@ module accel
 
    assign north = 0;
    assign we_ = we && (state == IDLE);
+   assign shift = shifts[layer*SHIFT_WIDTH+:SHIFT_WIDTH];
 
    weight_store #(ROWS, COLS, WIDTH) weights
      (clk, we_, wcol, wdata, re, wreset, rdata, empty);
-
 
    matmul #(.N(NEURONS), .M(NEURONS), .WIDTH(WIDTH)) matmul
      (clk, mreset, acce, rdata, south, out_vec, mdone);
 
    queue #(.WIDTH(WIDTH), .LENGTH(NEURONS)) queue
      (clk, qreset, shifte, north, south, le, data);
+
+   requantizer #(WIDTH, NEURONS, SHIFT_WIDTH, OUT_WIDTH) requantizer
+     (shift, out_vec, reqout);
 
    typedef enum logic [2:0]
      { IDLE,
@@ -67,9 +74,9 @@ module accel
              run_count <= 0;
           end
 
-        if (state == CAPTURE)
+        if (state == CAPTURE && layer < nlayers - 1)
           for (int i = 0; i < NEURONS; i++)
-            feedback_qin[(NEURONS-1-i)*WIDTH+:WIDTH] <= out_vec[i*OUT_WIDTH+:WIDTH];
+            feedback_qin[(NEURONS-1-i)*WIDTH+:WIDTH] <= reqout[i*WIDTH+:WIDTH];
         
         if (state == IDLE && start)
           layer <= 0;
@@ -77,7 +84,7 @@ module accel
           layer <= layer + 1;
 
         if (state == CAPTURE)
-          result <= out_vec;
+          result <= reqout;
 
         run_count <= (state == RUN) ? run_count + 1 : 0;
      end
