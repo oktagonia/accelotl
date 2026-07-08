@@ -2,6 +2,11 @@
 build/
 *.vvp
 *.vcd
+*_tb
+
+# Local reports/plans
+plan/
+docs/
 
 # Python
 __pycache__/
@@ -12,3 +17,6 @@ __pycache__/
 # macOS
 .DS_Store
 
+# Editor backups
+*~
+\#*\#

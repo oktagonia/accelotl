@@ -20,7 +20,9 @@ Hardware neural network accelerator with systolic array architecture in SystemVe
 make mac
 make matmul
 make queue
-make combined
+make relu
+make requantizer
+make weight_store
 make accel
 ```
 
