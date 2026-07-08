@@ -7,22 +7,26 @@ module accel
     parameter COLS = (2*NEURONS-1)*LAYERS,
     parameter OUT_WIDTH = 2*WIDTH + $clog2(NEURONS),
     parameter STREAM_CYCLES = 2*NEURONS - 1)
-   (input logic                                 clk, reset, start,
-    input logic                                 we,
-    input logic [$clog2(COLS)-1:0]              wcol,
-    input logic [ROWS*WIDTH-1:0]                wdata,
-    input logic [$clog2(LAYERS+1)-1:0]          nlayers,
-    input logic [LAYERS*SHIFT_WIDTH-1:0]        shifts,
-    input logic signed [NEURONS*WIDTH-1:0]      init_qin,
+   (input logic                             clk, reset, start,
+    input logic                             we, bwe,
+    input logic                             breset,
+    input logic [$clog2(COLS)-1:0]          wcol,
+    input logic [ROWS*WIDTH-1:0]            wdata,
+    input logic [$clog2(LAYERS)-1:0]        wlayer,
+    input logic signed [ROWS*OUT_WIDTH-1:0] bdata,
+    input logic [$clog2(LAYERS+1)-1:0]      nlayers,
+    input logic [LAYERS*SHIFT_WIDTH-1:0]    shifts,
+    input logic signed [NEURONS*WIDTH-1:0]  init_qin,
     output logic signed [NEURONS*WIDTH-1:0] result,
-    output logic                                done);
+    output logic                            done);
 
    logic re, empty;
    logic mdone;
    logic acce;
    logic le;
-   logic we_;
+   logic we_, bwe_;
    logic shifte;
+   logic bre;
    logic qreset, mreset, wreset;
    
    logic [ROWS*WIDTH-1:0] rdata;
@@ -32,17 +36,23 @@ module accel
    logic signed [NEURONS*WIDTH-1:0] feedback_qin;
    logic signed [NEURONS*WIDTH-1:0] reqout;
    logic signed [NEURONS*WIDTH-1:0] reluout;
+   logic signed [ROWS*OUT_WIDTH-1:0] bias;
    logic signed [NEURONS*OUT_WIDTH-1:0] out_vec;
+   logic signed [NEURONS*OUT_WIDTH-1:0] bout_vec;
 
-   logic [$clog2(LAYERS):0]             layer;
-   logic [$clog2(STREAM_CYCLES):0]      run_count;
+   logic [$clog2(LAYERS)-1:0] layer;
+   logic [$clog2(STREAM_CYCLES):0] run_count;
 
    assign north = 0;
    assign we_ = we && (state == IDLE);
+   assign bwe_ = bwe && (state == IDLE);
    assign shift = shifts[layer*SHIFT_WIDTH+:SHIFT_WIDTH];
 
    weight_store #(ROWS, COLS, WIDTH) weights
      (clk, we_, wcol, wdata, re, wreset, rdata, empty);
+
+   bias_store #(ROWS, LAYERS, OUT_WIDTH) biases
+     (clk, breset, bwe_, bre, wlayer, layer, bdata, bias);
 
    matmul #(.N(NEURONS), .M(NEURONS), .WIDTH(WIDTH)) matmul
      (clk, mreset, acce, rdata, south, out_vec, mdone);
@@ -51,7 +61,7 @@ module accel
      (clk, qreset, shifte, north, south, le, data);
 
    requantizer #(WIDTH, NEURONS, SHIFT_WIDTH, OUT_WIDTH) requantizer
-     (shift, out_vec, reqout);
+     (shift, bout_vec, reqout);
 
    relu #(WIDTH, NEURONS) relu(reqout, reluout);
 
@@ -86,7 +96,7 @@ module accel
         else if (state == CAPTURE && layer != nlayers-1)
           layer <= layer + 1;
 
-        if (state == CAPTURE)
+        if (state == CAPTURE && layer == nlayers-1)
           result <= reqout;
 
         run_count <= (state == RUN) ? run_count + 1 : 0;
@@ -103,6 +113,11 @@ module accel
         mreset = 0;
         qreset = 0;
         data = '0;
+        bre = 0;
+
+        for (int i = 0; i < NEURONS; i++)
+          bout_vec[i*OUT_WIDTH+:OUT_WIDTH] = 
+                     out_vec[i*OUT_WIDTH+:OUT_WIDTH] + bias[i*OUT_WIDTH+:OUT_WIDTH];
         
         case (state)
           IDLE:
@@ -171,6 +186,7 @@ module accel
                wreset = 0;
                mreset = 0;
                qreset = 0;
+               bre = 1;
             end
           RUN:
             begin

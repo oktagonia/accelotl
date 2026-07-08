@@ -21,8 +21,12 @@ module accel_tb;
    logic reset = 0;
    logic start = 0;
    logic we = 0;
+   logic bwe = 0;
+   logic breset = 0;
    logic [$clog2(COLS)-1:0] wcol = 0;
    logic [ROWS*WIDTH-1:0] wdata = 0;
+   logic [$clog2(LAYERS)-1:0] wlayer = 0;
+   logic signed [ROWS*OUT_WIDTH-1:0] bdata = 0;
    logic [$clog2(LAYERS+1)-1:0] nlayers = LAYERS;
    logic [LAYERS*SHIFT_WIDTH-1:0] shifts = '0;
    logic signed [NEURONS*WIDTH-1:0] init_qin = 0;
@@ -32,6 +36,8 @@ module accel_tb;
    int signed x[NEURONS];
    int signed w0[NEURONS][NEURONS];
    int signed w1[NEURONS][NEURONS];
+   int signed b0[NEURONS];
+   int signed b1[NEURONS];
    int signed y0_acc[NEURONS];
    int signed y0_q[NEURONS];
    int signed y0_relu[NEURONS];
@@ -48,8 +54,12 @@ module accel_tb;
       .reset(reset),
       .start(start),
       .we(we),
+      .bwe(bwe),
+      .breset(breset),
       .wcol(wcol),
       .wdata(wdata),
+      .wlayer(wlayer),
+      .bdata(bdata),
       .nlayers(nlayers),
       .shifts(shifts),
       .init_qin(init_qin),
@@ -106,6 +116,9 @@ module accel_tb;
          w1[2][0] = 8;   w1[2][1] = -8;  w1[2][2] = 4;   w1[2][3] = 0;
          w1[3][0] = 0;   w1[3][1] = 4;   w1[3][2] = 4;   w1[3][3] = -4;
 
+         b0[0] = 8;    b0[1] = -16;  b0[2] = 20;    b0[3] = -32;
+         b1[0] = 12;   b1[1] = -20;  b1[2] = -200;  b1[3] = 16;
+
          for (int row = 0; row < NEURONS; row++) begin
             y0_acc[row] = 0;
             y1_acc[row] = 0;
@@ -113,6 +126,7 @@ module accel_tb;
             for (int col = 0; col < NEURONS; col++)
               y0_acc[row] += w0[row][col] * x[col];
 
+            y0_acc[row] += b0[row];
             y0_q[row] = requantize_ref(y0_acc[row], SHIFT0);
             y0_relu[row] = relu_ref(y0_q[row]);
          end
@@ -121,6 +135,7 @@ module accel_tb;
             for (int col = 0; col < NEURONS; col++)
               y1_acc[row] += w1[row][col] * y0_relu[col];
 
+            y1_acc[row] += b1[row];
             y1_q[row] = requantize_ref(y1_acc[row], SHIFT1);
          end
       end
@@ -138,6 +153,27 @@ module accel_tb;
          @(posedge clk);
          @(negedge clk);
          we = 0;
+      end
+   endtask
+
+   task automatic load_bias(input int layer_idx);
+      logic signed [ROWS*OUT_WIDTH-1:0] bias_vec;
+      logic signed [OUT_WIDTH-1:0] bias_lane;
+      begin
+         bias_vec = '0;
+
+         for (int row = 0; row < NEURONS; row++) begin
+            bias_lane = (layer_idx == 0) ? b0[row] : b1[row];
+            bias_vec[row*OUT_WIDTH +: OUT_WIDTH] = bias_lane;
+         end
+
+         @(negedge clk);
+         wlayer = layer_idx[$clog2(LAYERS)-1:0];
+         bdata = bias_vec;
+         bwe = 1;
+         @(posedge clk);
+         @(negedge clk);
+         bwe = 0;
       end
    endtask
 
@@ -296,6 +332,26 @@ module accel_tb;
       end
    endtask
 
+   task automatic print_biases;
+      begin
+         $write("b0 = [");
+         for (int i = 0; i < NEURONS; i++) begin
+            if (i != 0)
+              $write(", ");
+            $write("%0d", b0[i]);
+         end
+         $display("]");
+
+         $write("b1 = [");
+         for (int i = 0; i < NEURONS; i++) begin
+            if (i != 0)
+              $write(", ");
+            $write("%0d", b1[i]);
+         end
+         $display("]");
+      end
+   endtask
+
    task automatic print_refs;
       begin
          $write("y0_acc = [");
@@ -377,6 +433,7 @@ module accel_tb;
       $display("integer fixed-point values:");
       print_x();
       print_w0();
+      print_biases();
       print_refs();
       print_w1();
 
@@ -384,15 +441,20 @@ module accel_tb;
       shifts[1*SHIFT_WIDTH +: SHIFT_WIDTH] = SHIFT1[SHIFT_WIDTH-1:0];
 
       reset = 1;
+      breset = 1;
       start = 0;
       we = 0;
+      bwe = 0;
       init_qin = 0;
       repeat (2) @(posedge clk);
       @(negedge clk);
       reset = 0;
+      breset = 0;
 
       load_layer(0);
       load_layer(1);
+      load_bias(0);
+      load_bias(1);
 
       @(negedge clk);
       for (int i = 0; i < NEURONS; i++)

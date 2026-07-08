@@ -1,10 +1,10 @@
 # Simple Makefile: one target per testbench
-# Usage: make mac / make matmul / make relu / make requantizer / make accel / make weight_store / make queue
+# Usage: make mac / make matmul / make relu / make requantizer / make accel / make weight_store / make bias_store / make queue
 
 IVERILOG ?= iverilog
 VVP ?= vvp
 
-.PHONY: mac matmul relu requantizer accel weight_store queue clean
+.PHONY: mac matmul relu requantizer accel weight_store bias_store queue clean
 
 mac:
 	$(IVERILOG) -g2012 -o mac_tb rtl/mac.sv tb/mac_tb.sv
@@ -30,6 +30,10 @@ accel:
 weight_store:
 	$(IVERILOG) -g2012 -o weight_store_tb rtl/weight_store.sv tb/weight_store_tb.sv
 	$(VVP) weight_store_tb
+
+bias_store:
+	$(IVERILOG) -g2012 -o bias_store_tb rtl/bias_store.sv tb/bias_store_tb.sv
+	$(VVP) bias_store_tb
 
 queue:
 	$(IVERILOG) -g2012 -o queue_tb rtl/queue.sv tb/queue_tb.sv

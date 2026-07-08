@@ -1,7 +1,7 @@
 module weight_store
   #(parameter ROWS = 8,
-     parameter COLS = 16,
-     parameter WIDTH = 8)
+    parameter COLS = 16,
+    parameter WIDTH = 8)
    (input logic                          clk, 
     // write ports
     input logic                          we,
