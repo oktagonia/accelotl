@@ -34,6 +34,7 @@ module accel_tb;
    int signed w1[NEURONS][NEURONS];
    int signed y0_acc[NEURONS];
    int signed y0_q[NEURONS];
+   int signed y0_relu[NEURONS];
    int signed y1_acc[NEURONS];
    int signed y1_q[NEURONS];
 
@@ -76,6 +77,10 @@ module accel_tb;
       requantize_ref = clamp_int8(value >>> shift);
    endfunction
 
+   function automatic int signed relu_ref(input int signed value);
+      relu_ref = (value > 0) ? value : 0;
+   endfunction
+
    function automatic logic signed [WIDTH-1:0] to_width(input int signed value);
       to_width = value[WIDTH-1:0];
    endfunction
@@ -109,11 +114,12 @@ module accel_tb;
               y0_acc[row] += w0[row][col] * x[col];
 
             y0_q[row] = requantize_ref(y0_acc[row], SHIFT0);
+            y0_relu[row] = relu_ref(y0_q[row]);
          end
 
          for (int row = 0; row < NEURONS; row++) begin
             for (int col = 0; col < NEURONS; col++)
-              y1_acc[row] += w1[row][col] * y0_q[col];
+              y1_acc[row] += w1[row][col] * y0_relu[col];
 
             y1_q[row] = requantize_ref(y1_acc[row], SHIFT1);
          end
@@ -182,6 +188,7 @@ module accel_tb;
          $display("  x_real      = x / 2^%0d", X_FRAC);
          $display("  w0_real     = w0 / 2^%0d", W0_FRAC);
          $display("  y0_q_real   = y0_q / 2^%0d", Y0_FRAC);
+         $display("  y0_relu_real = y0_relu / 2^%0d", Y0_FRAC);
          $display("  w1_real     = w1 / 2^%0d", W1_FRAC);
          $display("  output_real = output / 2^%0d", Y1_FRAC);
 
@@ -221,7 +228,15 @@ module accel_tb;
          end
          $display("]");
 
-         $display("real matmul 1: y1 = w1*y0_q");
+         $write("y0_relu_real = [");
+         for (int i = 0; i < NEURONS; i++) begin
+            if (i != 0)
+              $write(", ");
+            $write("%0.6f", to_real(y0_relu[i], Y0_FRAC));
+         end
+         $display("]");
+
+         $display("real matmul 1: y1 = w1*relu(y0_q)");
          $display("w1_real =");
          for (int row = 0; row < NEURONS; row++) begin
             $write("  [");
@@ -296,6 +311,14 @@ module accel_tb;
             if (i != 0)
               $write(", ");
             $write("%0d", y0_q[i]);
+         end
+         $display("]");
+
+         $write("y0_relu = [");
+         for (int i = 0; i < NEURONS; i++) begin
+            if (i != 0)
+              $write(", ");
+            $write("%0d", y0_relu[i]);
          end
          $display("]");
 

@@ -31,6 +31,7 @@ module accel
    logic signed [NEURONS*WIDTH-1:0] data;
    logic signed [NEURONS*WIDTH-1:0] feedback_qin;
    logic signed [NEURONS*WIDTH-1:0] reqout;
+   logic signed [NEURONS*WIDTH-1:0] reluout;
    logic signed [NEURONS*OUT_WIDTH-1:0] out_vec;
 
    logic [$clog2(LAYERS):0]             layer;
@@ -51,6 +52,8 @@ module accel
 
    requantizer #(WIDTH, NEURONS, SHIFT_WIDTH, OUT_WIDTH) requantizer
      (shift, out_vec, reqout);
+
+   relu #(WIDTH, NEURONS) relu(reqout, reluout);
 
    typedef enum logic [2:0]
      { IDLE,
@@ -76,7 +79,7 @@ module accel
 
         if (state == CAPTURE && layer < nlayers - 1)
           for (int i = 0; i < NEURONS; i++)
-            feedback_qin[(NEURONS-1-i)*WIDTH+:WIDTH] <= reqout[i*WIDTH+:WIDTH];
+            feedback_qin[(NEURONS-1-i)*WIDTH+:WIDTH] <= reluout[i*WIDTH+:WIDTH];
         
         if (state == IDLE && start)
           layer <= 0;

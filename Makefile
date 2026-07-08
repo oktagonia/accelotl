@@ -28,7 +28,7 @@ requantizer:
 
 accel:
 	mkdir -p build
-	$(IVERILOG) -g2012 -o build/accel_tb rtl/mac.sv rtl/matmul.sv rtl/weight_store.sv rtl/queue.sv rtl/requantizer.sv rtl/accel.sv tb/accel_tb.sv
+	$(IVERILOG) -g2012 -o build/accel_tb rtl/mac.sv rtl/matmul.sv rtl/weight_store.sv rtl/queue.sv rtl/requantizer.sv rtl/relu.sv rtl/accel.sv tb/accel_tb.sv
 	$(VVP) build/accel_tb
 
 weight_store:
